@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chia tiền nhóm</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--tx:#1b1f24;--mu:#667085;--bd:#e4e7ec;--ac:#5b5fc7;--acx:#fff;--ok:#1a7f4b;--okbg:#e3f5ea;--wr:#b42318;--wrbg:#fdecea;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161a;--card:#1f2228;--tx:#eceef2;--mu:#9aa3b2;--bd:#31353d;--ac:#8b8ff0;--acx:#14161a;--ok:#5fd394;--okbg:#17352a;--wr:#ff8f85;--wrbg:#3b1d1a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14161a;--card:#1f2228;--tx:#eceef2;--mu:#9aa3b2;--bd:#31353d;--ac:#8b8ff0;--acx:#14161a;--ok:#5fd394;--okbg:#17352a;--wr:#ff8f85;--wrbg:#3b1d1a;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--mu);margin:0 0 16px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:12px;color:var(--mu);margin:10px 0 4px}
+input,textarea{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+textarea{min-height:92px;resize:vertical}
+.row{display:flex;gap:10px}.row>div{flex:1}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:7px 12px}
+button.pri{background:var(--ac);color:var(--acx);border-color:var(--ac);font-weight:600;padding:10px 14px;width:100%;margin-top:12px}
+.hint{font-size:12px;color:var(--mu);margin-top:4px}
+.err{color:var(--wr);font-size:13px;margin-top:8px}
+.warn{background:var(--wrbg);color:var(--wr);padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{background:var(--wrbg);color:var(--wr);border-radius:999px;padding:3px 10px;font-size:13px}
+.tabs{display:flex;gap:6px;margin:16px 0 10px}
+.tabs button.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+.bh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.bt{font-weight:600}.bm{color:var(--mu);font-size:13px}
+.bar{height:6px;border-radius:6px;background:var(--bd);margin:10px 0;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.p{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)}
+.p .n{flex:1}.p .a{font-variant-numeric:tabular-nums}
+.tg{min-width:92px;font-size:13px}
+.tg.paid{background:var(--okbg);color:var(--ok);border-color:transparent}
+.tg.due{background:var(--wrbg);color:var(--wr);border-color:transparent}
+.tg[disabled]{opacity:.7;cursor:default}
+.acts{display:flex;gap:8px;margin-top:10px}
+.empty{text-align:center;color:var(--mu);padding:24px 0}
+select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.qb{font-size:13px;padding:7px 10px}
+.qr{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:6px 0 10px}
+.qr svg{width:168px;height:168px;background:#fff;padding:8px;border-radius:10px}
+.qrt{font-size:13px;color:var(--mu);line-height:1.6}
+.tm{margin:0 0 6px;width:100%;border-style:dashed;color:var(--ac)}
+</style>
+</head>
+<body>
+<main>
+  <h1>🧋 Chia tiền nhóm</h1>
+  <p class="sub">Tạo hóa đơn, chia tiền, theo dõi ai đã trả. Dữ liệu chỉ lưu trên thiết bị này, bấm Xóa khi mọi người đã trả xong.</p>
+  <div id="warn" class="warn" hidden>Trình duyệt không cho lưu dữ liệu. Hóa đơn sẽ mất khi tải lại trang.</div>
+
+  <div class="card" id="sum" hidden>
+    <b>Còn nợ chưa trả</b>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="card">
+    <b>Hóa đơn mới</b>
+    <label for="t">Tên hóa đơn</label>
+    <input id="t" placeholder="VD: Trà sữa chiều thứ Sáu">
+    <div class="row">
+      <div><label for="m">Tổng tiền (đ)</label><input id="m" inputmode="numeric" placeholder="VD: 250000 hoặc 250k"></div>
+      <div><label for="pay">Người ứng tiền</label><input id="pay" placeholder="Tên người trả trước"></div>
+    </div>
+    <div class="row"><div><label for="bk">Ngân hàng nhận tiền</label><select id="bk"></select></div><div><label for="ac">Số tài khoản</label><input id="ac" inputmode="numeric" placeholder="Để trống nếu không cần QR"></div></div>
+    <label for="pp">Người tham gia (mỗi dòng một người)</label>
+    <button type="button" class="tm" id="tm" hidden>👥 Chọn từ thành viên Teams</button>
+    <textarea id="pp" placeholder="Linh&#10;Bình&#10;Nam: 45k"></textarea>
+    <div class="hint">Mặc định chia đều. Muốn ai trả số riêng thì ghi <b>Tên: số tiền</b>, phần còn lại chia đều cho những người chưa ghi số.</div>
+    <div class="err" id="err"></div>
+    <button class="pri" id="go">Tạo và chia tiền</button>
+  </div>
+
+  <div class="tabs">
+    <button id="tOpen" class="on">Chưa xong</button>
+    <button id="tAll">Tất cả</button>
+  </div>
+  <div id="list"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@microsoft/teams-js@2.31.1/dist/MicrosoftTeams.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const fmt = n => new Intl.NumberFormat('vi-VN').format(Math.round(n)) + 'đ';
+const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+const key = s => s.trim().toLowerCase();
+let bills = [], tab = 'open', delArm = null, qrOpen = null;
+
+// ---------- VietQR (chuẩn NAPAS 247) ----------
+const BANKS = [['Vietcombank','970436'],['VietinBank','970415'],['BIDV','970418'],['Agribank','970405'],['Techcombank','970407'],['MB Bank','970422'],['ACB','970416'],['VPBank','970432'],['TPBank','970423'],['Sacombank','970403'],['VIB','970441'],['HDBank','970437'],['SHB','970443'],['OCB','970448'],['MSB','970426'],['SeABank','970440'],['Eximbank','970431'],['LPBank','970449']];
+const bankName = bin => (BANKS.find(b => b[1] === bin) || ['Ngân hàng'])[0];
+$('#bk').innerHTML = BANKS.map(b => '<option value="' + b[1] + '">' + b[0] + '</option>').join('');
+try { const s = JSON.parse(localStorage.getItem('bank') || 'null'); if (s) { $('#bk').value = s.bin; $('#ac').value = s.acc; $('#pay').value = s.payer || ''; } } catch (_) {}
+const ascii = s => s.replace(/đ/g, 'd').replace(/Đ/g, 'D').normalize('NFD').split('').filter(c => /[A-Za-z0-9 ]/.test(c)).join('');
+const tlv = (id, v) => id + String(v.length).padStart(2, '0') + v;
+function crc16(s) { let c = 0xFFFF; for (let i = 0; i < s.length; i++) { c ^= s.charCodeAt(i) << 8; for (let j = 0; j < 8; j++) c = (c & 0x8000) ? ((c << 1) ^ 0x1021) & 0xFFFF : (c << 1) & 0xFFFF; } return c.toString(16).toUpperCase().padStart(4, '0'); }
+function vietqr(bin, acc, amount, memo) {
+  const m = tlv('00', 'A000000727') + tlv('01', tlv('00', bin) + tlv('01', acc)) + tlv('02', 'QRIBFTTA');
+  const p = tlv('00', '01') + tlv('01', '12') + tlv('38', m) + tlv('53', '704') + tlv('54', String(Math.round(amount))) + tlv('58', 'VN') + tlv('62', tlv('08', memo));
+  return p + '6304' + crc16(p + '6304');
+}
+function qrPanel(b, x) {
+  const memo = ascii(x.n + ' ' + b.title).toUpperCase().slice(0, 25).trim();
+  let svg = '';
+  try { const q = qrcode(0, 'M'); q.addData(vietqr(b.bank.bin, b.bank.acc, x.a, memo)); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (_) {}
+  return '<div class="qr">' + (svg || '<span class="qrt">Không tạo được QR.</span>') + '<div class="qrt"><b>' + esc(x.n) + '</b>: ' + fmt(x.a) + '<br>' + esc(bankName(b.bank.bin)) + ' · ' + esc(b.bank.acc) + '<br>Người nhận: ' + esc(b.payer) + '<br>Nội dung: ' + esc(memo) + '</div></div>';
+}
+
+// ---------- data layer (localStorage, chỉ trên thiết bị này) ----------
+const STORE = 'bills';
+function load() { try { return JSON.parse(localStorage.getItem(STORE) || '[]'); } catch (_) { return []; } }
+function save() { try { localStorage.setItem(STORE, JSON.stringify(bills)); } catch (_) { $('#warn').hidden = false; } }
+bills = load();
+async function addBill(b) { bills.unshift({ id: 'l' + Date.now(), ...b }); save(); render(); }
+async function setPeople(id, people) { bills.find(x => x.id === id).people = people; save(); render(); }
+async function delBill(id) { bills = bills.filter(x => x.id !== id); save(); render(); }
+
+// ---------- Microsoft Teams ----------
+const TJ = window.microsoftTeams;
+(async () => {
+  if (!TJ) return;
+  try {
+    await Promise.race([TJ.app.initialize(), new Promise((_, r) => setTimeout(r, 2500))]);
+    const c = await TJ.app.getContext();
+    $('#tm').hidden = false;
+    const me = c && c.user && c.user.displayName;
+    if (me && !$('#pay').value) $('#pay').value = me;
+  } catch (_) { /* không chạy trong Teams: ẩn nút */ }
+})();
+$('#tm').onclick = async () => {
+  try {
+    if (!TJ.people.isSupported()) { $('#err').textContent = 'Phiên bản Teams này chưa hỗ trợ chọn thành viên. Hãy gõ tên tay.'; return; }
+    const sel = await TJ.people.selectPeople({ title: 'Chọn người tham gia', openOrgWideSearchInChatOrChannel: true, singleSelect: false });
+    const have = new Set($('#pp').value.split('\n').map(l => key(l.split(/[:=]/)[0])).filter(Boolean));
+    const add = (sel || []).map(p => (p.displayName || '').trim()).filter(n => n && !have.has(key(n)));
+    if (add.length) $('#pp').value = ($('#pp').value.trim() ? $('#pp').value.trim() + '\n' : '') + add.join('\n');
+    $('#err').textContent = '';
+  } catch (_) { /* người dùng đóng hộp thoại */ }
+};
+
+// ---------- parsing ----------
+function amt(s) {
+  s = String(s).trim().toLowerCase().replace(/\s/g, '');
+  const k = /k$/.test(s); s = s.replace(/k$/, '').replace(/[.,]/g, '');
+  const n = parseInt(s, 10);
+  return isNaN(n) ? NaN : (k ? n * 1000 : n);
+}
+function split(total, txt) {
+  const rows = txt.split(/[\n;]+|,(?!\d)/).map(x => x.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(.*?)\s*[:=]\s*([\d.,\s]+k?)$/i);
+    if (m && m[1]) { const a = amt(m[2]); if (!isNaN(a)) return { n: m[1].trim(), a }; }
+    return { n: l, a: null };
+  });
+  if (!rows.length) return { error: 'Hãy nhập ít nhất một người tham gia.' };
+  const fixed = rows.filter(r => r.a !== null), free = rows.filter(r => r.a === null);
+  const rest = total - fixed.reduce((s, r) => s + r.a, 0);
+  if (rest < 0) return { error: 'Tổng các khoản ghi riêng vượt quá tổng tiền.' };
+  if (free.length) {
+    const base = Math.floor(rest / free.length);
+    free.forEach(r => r.a = base);
+    free[0].a += rest - base * free.length;
+  } else if (rest !== 0) return { error: 'Các khoản ghi riêng chưa khớp tổng tiền (lệch ' + fmt(rest) + ').' };
+  return { rows };
+}
+
+// ---------- actions ----------
+$('#go').onclick = async () => {
+  const title = $('#t').value.trim(), payer = $('#pay').value.trim(), total = amt($('#m').value);
+  const err = m => $('#err').textContent = m;
+  if (!title) return err('Nhập tên hóa đơn.');
+  if (!(total > 0)) return err('Nhập tổng tiền hợp lệ.');
+  if (!payer) return err('Nhập tên người ứng tiền.');
+  const r = split(total, $('#pp').value);
+  if (r.error) return err(r.error);
+  err('');
+  const people = r.rows.map(x => ({ n: x.n, a: x.a, p: key(x.n) === key(payer) }));
+  try {
+    const bin = $('#bk').value, acc = $('#ac').value.split('').filter(c => c >= '0' && c <= '9').join('');
+    try { localStorage.setItem('bank', JSON.stringify({ bin, acc, payer })); } catch (_) {}
+    await addBill({ title, total, payer, people, bank: acc ? { bin, acc } : null, createdAt: Date.now() });
+    $('#t').value = $('#m').value = $('#pp').value = '';
+  } catch (e) { err('Không lưu được, thử lại nhé.'); }
+};
+$('#tOpen').onclick = () => { tab = 'open'; render(); };
+$('#tAll').onclick = () => { tab = 'all'; render(); };
+
+$('#list').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const bill = bills.find(x => x.id === b.dataset.b); if (!bill) return;
+  if (b.dataset.i !== undefined) {
+    const people = bill.people.map(x => ({ ...x }));
+    people[+b.dataset.i].p = !people[+b.dataset.i].p;
+    try { await setPeople(bill.id, people); } catch (_) {}
+  } else if (b.dataset.act === 'qr') {
+    const k = bill.id + ':' + b.dataset.q; qrOpen = qrOpen === k ? null : k; render();
+  } else if (b.dataset.act === 'copy') {
+    const due = bill.people.filter(x => !x.p);
+    const txt = '🧾 ' + bill.title + ' (' + fmt(bill.total) + ') - ' + bill.payer + ' đã ứng tiền.\n' +
+      (due.length ? 'Nhờ mọi người chuyển khoản giúp:\n' + due.map(x => '• ' + x.n + ': ' + fmt(x.a)).join('\n') : 'Mọi người đã trả đủ, cảm ơn cả nhà!') +
+      (bill.bank && due.length ? ['', 'Chuyển khoản: ' + bankName(bill.bank.bin) + ' - ' + bill.bank.acc + ' (' + bill.payer + ')'].join(String.fromCharCode(10)) : '');
+    try { await navigator.clipboard.writeText(txt); }
+    catch (_) { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (__) {} t.remove(); }
+    b.textContent = 'Đã sao chép ✓'; setTimeout(() => b.textContent = 'Sao chép nhắc nợ', 1800);
+  } else if (b.dataset.act === 'del') {
+    if (delArm === bill.id) { delArm = null; try { await delBill(bill.id); } catch (_) {} }
+    else { delArm = bill.id; render(); setTimeout(() => { if (delArm === bill.id) { delArm = null; render(); } }, 3000); }
+  }
+};
+
+// ---------- render ----------
+function render() {
+  $('#tOpen').classList.toggle('on', tab === 'open');
+  $('#tAll').classList.toggle('on', tab === 'all');
+
+  const owed = {};
+  bills.forEach(b => b.people.forEach(x => { if (!x.p) { const k = key(x.n); (owed[k] ||= { n: x.n, a: 0 }).a += x.a; } }));
+  const o = Object.values(owed).sort((a, b) => b.a - a.a);
+  $('#sum').hidden = !o.length;
+  $('#chips').innerHTML = o.map(x => '<span class="chip">' + esc(x.n) + ': ' + fmt(x.a) + '</span>').join('');
+
+  const shown = bills.filter(b => tab === 'all' || b.people.some(x => !x.p));
+  if (!shown.length) { $('#list').innerHTML = '<div class="empty">' + (bills.length ? 'Tất cả hóa đơn đã được thanh toán 🎉' : 'Chưa có hóa đơn nào.') + '</div>'; return; }
+  $('#list').innerHTML = shown.map(b => {
+    const got = b.people.filter(x => x.p).reduce((s, x) => s + x.a, 0);
+    const pct = Math.round(100 * got / b.total);
+    const left = b.people.filter(x => !x.p).length;
+    return '<div class="card"><div class="bh"><div><div class="bt">' + esc(b.title) + '</div>' +
+      '<div class="bm">' + esc(b.payer) + ' ứng ' + fmt(b.total) + ' · ' + new Date(b.createdAt || Date.now()).toLocaleDateString('vi-VN') + '</div></div>' +
+      '<div class="bm">' + (left ? 'Còn ' + left + ' người' : '✅ Đã đủ') + '</div></div>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+      b.people.map((x, i) => {
+        const isP = key(x.n) === key(b.payer);
+        return '<div class="p"><span class="n">' + esc(x.n) + (isP ? ' <span class="bm">(người ứng)</span>' : '') + '</span><span class="a">' + fmt(x.a) + '</span>' +
+          '<button class="tg ' + (x.p ? 'paid' : 'due') + '" data-b="' + b.id + '" data-i="' + i + '"' + (isP ? ' disabled' : '') + '>' + (x.p ? '✓ Đã trả' : 'Chưa trả') + '</button>' +
+          (b.bank && !x.p && !isP ? '<button class="qb" data-b="' + b.id + '" data-q="' + i + '" data-act="qr">QR</button>' : '') + '</div>' +
+          (qrOpen === b.id + ':' + i && !x.p && b.bank ? qrPanel(b, x) : '');
+      }).join('') +
+      '<div class="acts"><button data-b="' + b.id + '" data-act="copy">Sao chép nhắc nợ</button>' +
+      '<button data-b="' + b.id + '" data-act="del">' + (delArm === b.id ? 'Bấm lại để xóa' : 'Xóa') + '</button></div></div>';
+  }).join('');
+}
+render();
+</script>
+</body>
+</html>
