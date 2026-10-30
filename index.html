@@ -69,7 +69,7 @@ select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;
     </div>
     <div class="row"><div><label for="bk">Ngân hàng nhận tiền</label><select id="bk"></select></div><div><label for="ac">Số tài khoản</label><input id="ac" inputmode="numeric" placeholder="Để trống nếu không cần QR"></div></div>
     <label for="pp">Người tham gia (mỗi dòng một người)</label>
-    <button type="button" class="tm" id="tm" hidden>👥 Chọn từ thành viên Teams</button>
+    <button type="button" class="tm" id="tm">👥 Chọn từ thành viên Teams</button>
     <textarea id="pp" placeholder="Linh&#10;Bình&#10;Nam: 45k"></textarea>
     <div class="hint">Mặc định chia đều. Muốn ai trả số riêng thì ghi <b>Tên: số tiền</b>, phần còn lại chia đều cho những người chưa ghi số.</div>
     <div class="err" id="err"></div>
@@ -123,25 +123,37 @@ async function delBill(id) { bills = bills.filter(x => x.id !== id); save(); ren
 
 // ---------- Microsoft Teams ----------
 const TJ = window.microsoftTeams;
+let teamsReady = null; // null = đang khởi tạo, true = chạy trong Teams, chuỗi = lý do lỗi
+const tmNote = m => { $('#err').textContent = m || ''; };
 (async () => {
-  if (!TJ) return;
+  if (!TJ) { teamsReady = 'Không tải được thư viện Teams (MicrosoftTeams.min.js). Kiểm tra mạng hoặc file index.html trên GitHub.'; return; }
   try {
-    await Promise.race([TJ.app.initialize(), new Promise((_, r) => setTimeout(r, 2500))]);
-    const c = await TJ.app.getContext();
-    $('#tm').hidden = false;
-    const me = c && c.user && c.user.displayName;
-    if (me && !$('#pay').value) $('#pay').value = me;
-  } catch (_) { /* không chạy trong Teams: ẩn nút */ }
+    await Promise.race([TJ.app.initialize(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000))]);
+    teamsReady = true;
+    try {
+      const c = await TJ.app.getContext();
+      const me = c && c.user && c.user.displayName;
+      if (me && !$('#pay').value) $('#pay').value = me;
+    } catch (_) {}
+  } catch (e) {
+    teamsReady = 'Trang này không chạy trong Microsoft Teams (' + (e && e.message ? e.message : 'lỗi khởi tạo') + '). Hãy mở app từ Teams.';
+  }
 })();
 $('#tm').onclick = async () => {
+  tmNote('');
+  if (teamsReady === null) return tmNote('Teams đang khởi tạo, thử lại sau vài giây.');
+  if (teamsReady !== true) return tmNote(teamsReady);
   try {
-    if (!TJ.people.isSupported()) { $('#err').textContent = 'Phiên bản Teams này chưa hỗ trợ chọn thành viên. Hãy gõ tên tay.'; return; }
+    if (!TJ.people || !TJ.people.isSupported()) return tmNote('Teams của bạn chưa hỗ trợ hộp chọn thành viên. Hãy gõ tên tay, mỗi dòng một người.');
     const sel = await TJ.people.selectPeople({ title: 'Chọn người tham gia', openOrgWideSearchInChatOrChannel: true, singleSelect: false });
     const have = new Set($('#pp').value.split('\n').map(l => key(l.split(/[:=]/)[0])).filter(Boolean));
     const add = (sel || []).map(p => (p.displayName || '').trim()).filter(n => n && !have.has(key(n)));
     if (add.length) $('#pp').value = ($('#pp').value.trim() ? $('#pp').value.trim() + '\n' : '') + add.join('\n');
-    $('#err').textContent = '';
-  } catch (_) { /* người dùng đóng hộp thoại */ }
+  } catch (e) {
+    const code = e && (e.errorCode !== undefined ? e.errorCode : e.message);
+    if (code === 'CANCELED' || code === 'Cancelled' || (e && e.errorCode === 8)) return;
+    tmNote('Không mở được hộp chọn thành viên (' + (code || 'lỗi không rõ') + '). Hãy gõ tên tay.');
+  }
 };
 
 // ---------- parsing ----------
