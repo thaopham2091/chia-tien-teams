@@ -52,6 +52,17 @@ section.list{display:flex;flex-direction:column;min-height:0;border-right:1px so
 .sw input:checked+.trk{background:var(--sage)}
 .sw input:checked+.trk::after{transform:translateX(16px)}
 .sw input:focus-visible+.trk{outline:2px solid var(--plum);outline-offset:2px}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.th{position:relative;width:76px;height:76px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th button{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;border:0;background:#000a;color:#fff;line-height:1;padding:0}
+#lb{width:min(920px,96vw)}
+.lb{padding:14px;display:grid;gap:10px}
+.lbtop{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px}
+#lbimg{max-width:100%;max-height:72vh;margin:0 auto;object-fit:contain;border-radius:8px}
+.lb .row{justify-content:center}
+.hint{font-size:12px;color:var(--mute);margin:0}
+.ro #add,.ro [data-e],.ro .sw,.ro #impb{display:none}
 .empty{padding:28px 18px;color:var(--mute);border:1px dashed var(--line);border-radius:var(--r);text-align:center}
 .route{margin:0 18px 12px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);font-size:13px}
 .route ol{margin:6px 0 8px;padding-left:20px}
@@ -95,12 +106,20 @@ nav .grp{display:inline-block}nav button{display:inline-flex;width:auto}section.
   <label>Địa chỉ<input id="f_addr"></label>
   <label>Tọa độ, để tính khoảng cách (không bắt buộc; dán "lat,lng" hoặc link Google Maps dài có @lat,lng)<input id="f_pos" placeholder="10.8431, 106.8370"></label>
     <label>Dịch vụ & nội dung gói (mỗi dòng một ý)<textarea id="f_svc" rows="5"></textarea></label>
+  <div style="display:grid;gap:8px"><div class="row" style="justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--mute)">Hình ảnh</span><button class="btn sm" id="d_img">Tải hình lên</button></div><div id="thumbs" class="thumbs"></div><input type="file" id="f_img" accept="image/*" multiple hidden></div>
   <label>Ghi chú<textarea id="f_note" rows="2"></textarea></label>
   <div class="row" style="justify-content:space-between">
     <button class="btn sm" id="d_del" style="color:#b9505a">Xóa</button>
     <span class="row"><button class="btn" id="d_cancel">Hủy</button><button class="btn pri" id="d_save">Lưu</button></span>
   </div>
 </div></dialog>
+<dialog id="gdlg"><div class="dlg"><h3>Đồng bộ với GitHub</h3>
+<p class="hint">Dữ liệu và hình được lưu vào thư mục data/ của repo, nên mở trên máy nào cũng thấy. Tạo token tại GitHub: Settings, Developer settings, Fine-grained tokens, chỉ chọn repo này, quyền Contents: Read and write. Token chỉ lưu trong trình duyệt của máy này, không nằm trong file trang. Đừng nhập trên máy dùng chung. Máy chưa nhập token vẫn xem được (chỉ xem).</p>
+<div class="g2"><label>Tài khoản GitHub<input id="g_owner"></label><label>Tên repo<input id="g_repo"></label></div>
+<div class="g2"><label>Nhánh<input id="g_branch" placeholder="wedding-list"></label><label>Thư mục chứa trang (để trống nếu ở gốc repo)<input id="g_dir" placeholder="docs"></label></div>
+<label>Token<input id="g_token" type="password" autocomplete="off"></label>
+<div class="row" style="justify-content:space-between"><button class="btn sm" id="g_off" style="color:#b9505a">Ngắt kết nối</button><span class="row"><button class="btn" id="g_cancel">Hủy</button><button class="btn pri" id="g_save">Lưu và đồng bộ</button></span></div></div></dialog>
+<dialog id="lb"><div class="lb"><div class="lbtop"><b id="lbcap"></b><button class="btn sm" id="lbx">Đóng</button></div><img id="lbimg" alt=""><div class="row"><button class="btn sm" id="lbp">Hình trước</button><button class="btn sm" id="lbn">Hình sau</button></div></div></dialog>
 <input type="file" id="imp" accept="application/json" hidden>
 
 <script>
@@ -131,7 +150,50 @@ const seed=()=>[
 ];
 let S={places:seed()},cur='pre',editing=null,sel=null;
 try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+let db;
+const idb=()=>db?Promise.resolve(db):new Promise((ok,no)=>{const r=indexedDB.open('so-tay-cuoi-img',1);r.onupgradeneeded=()=>r.result.createObjectStore('img',{keyPath:'id'});r.onsuccess=()=>{db=r.result;ok(db)};r.onerror=()=>no(r.error)});
+const tx=async(m,f)=>{const d=await idb();return new Promise((ok,no)=>{const t=d.transaction('img',m),q=f(t.objectStore('img'));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>no(t.error)})};
+const imgPut=(id,blob)=>tx('readwrite',s=>s.put({id,blob}));
+const imgGetLocal=id=>tx('readonly',s=>s.get(id)).then(r=>r&&r.blob);
+async function imgGet(id){let b=await imgGetLocal(id).catch(()=>null);if(b)return b;
+ const c=GH();try{const r=c&&c.token?await gh(`${base()}/img/${id}.jpg`,{raw:1,q:'?ref='+c.branch}):await fetch(`data/img/${id}.jpg`);
+ if(r&&r.ok){b=await r.blob();imgPut(id,b).catch(()=>{});return b}}catch(e){}return null}
+const imgDel=id=>tx('readwrite',s=>s.delete(id)).catch(()=>{});
+async function shrink(f){const b=await createImageBitmap(f),k=Math.min(1,1600/Math.max(b.width,b.height)),c=document.createElement('canvas');c.width=Math.round(b.width*k);c.height=Math.round(b.height*k);c.getContext('2d').drawImage(b,0,0,c.width,c.height);return new Promise(r=>c.toBlob(r,'image/jpeg',.82))}
+const toDataUrl=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
+let tmp=[],added=[],removed=[],committed=false;
+async function renderThumbs(){const t=$('thumbs');t.innerHTML='';for(const id of tmp){let b;try{b=await imgGet(id)}catch(e){}if(!b)continue;const d=document.createElement('div');d.className='th';const i=new Image();i.src=URL.createObjectURL(b);i.alt='';const x=document.createElement('button');x.type='button';x.textContent='×';x.setAttribute('aria-label','Xóa hình');x.onclick=()=>{tmp=tmp.filter(k=>k!==id);if(added.includes(id)){added=added.filter(k=>k!==id);imgDel(id)}else removed.push(id);renderThumbs()};d.append(i,x);t.append(d)}}
+let lbIds=[],lbI=0,lbName='',lbUrl='';
+async function showLb(){let b;try{b=await imgGet(lbIds[lbI])}catch(e){}if(lbUrl)URL.revokeObjectURL(lbUrl);lbUrl=b?URL.createObjectURL(b):'';$('lbimg').src=lbUrl;$('lbcap').textContent=`${lbName} · ${lbI+1}/${lbIds.length}`}
+function openLb(id){const p=S.places.find(x=>x.id===id);lbIds=p.imgs||[];if(!lbIds.length)return;lbI=0;lbName=p.name;$('lb').showModal();showLb()}
+const GK='so-tay-cuoi-gh',DK='so-tay-cuoi-dirty',QK='so-tay-cuoi-q';
+const GH=()=>{try{return JSON.parse(localStorage.getItem(GK)||'null')}catch(e){return null}};
+const base=()=>{const c=GH();return(c&&c.dir?c.dir.replace(/^\/+|\/+$/g,'')+'/':'')+'data'};
+const Q=()=>{try{return JSON.parse(localStorage.getItem(QK)||'[]')}catch(e){return[]}};
+const setQ=a=>{try{localStorage.setItem(QK,JSON.stringify(a))}catch(e){}};
+let RO=false,syncMsg='',chain=Promise.resolve(),pt;
+function setSync(m){syncMsg=m;const e=document.getElementById('sync');if(e)e.textContent=m}
+const serial=f=>{const r=chain.then(f);chain=r.catch(()=>{});return r};
+function gh(path,o={}){const c=GH();return fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/${path}${o.q||''}`,{method:o.method||'GET',cache:'no-store',headers:{Accept:o.raw?'application/vnd.github.raw+json':'application/vnd.github+json',Authorization:'Bearer '+c.token,'X-GitHub-Api-Version':'2022-11-28'},body:o.body?JSON.stringify(o.body):undefined})}
+function ghPut(path,b64,msg){return serial(async()=>{const c=GH();
+ for(let i=0;i<2;i++){let sha;const r=await gh(path,{q:'?ref='+c.branch});if(r.ok)sha=(await r.json()).sha;else if(r.status!==404)throw new Error(r.status);
+  const w=await gh(path,{method:'PUT',body:{message:msg,content:b64,branch:c.branch,sha}});if(w.ok)return;if(w.status!==409&&w.status!==422)throw new Error(w.status)}
+ throw new Error('conflict')})}
+function rmRemote(id){const c=GH();if(!c||!c.token)return;setQ(Q().filter(x=>x!==id));return serial(async()=>{try{const p=`${base()}/img/${id}.jpg`,r=await gh(p,{q:'?ref='+c.branch});if(!r.ok)return;await gh(p,{method:'DELETE',body:{message:'Xóa hình '+id,sha:(await r.json()).sha,branch:c.branch}})}catch(e){}})}
+const enc=t=>btoa(unescape(encodeURIComponent(t)));
+async function pushPlaces(){const c=GH();if(!c||!c.token||RO)return;try{setSync('Đang lưu lên GitHub…');await ghPut(base()+'/places.json',enc(JSON.stringify({places:S.places},null,1)),'Cập nhật sổ tay cưới');localStorage.removeItem(DK);setSync('Đã đồng bộ GitHub')}catch(e){setSync('Lỗi lưu lên GitHub, kiểm tra token và quyền Contents')}}
+async function flushQueue(){const c=GH();if(!c||!c.token)return false;let q=Q();for(const id of [...q]){const b=await imgGetLocal(id).catch(()=>null);if(b){try{await ghPut(`${base()}/img/${id}.jpg`,(await toDataUrl(b)).split(',')[1],'Thêm hình '+id)}catch(e){setSync('Một số hình chưa tải lên được, sẽ thử lại lần sau');return false}}q=q.filter(x=>x!==id);setQ(q)}return true}
+const enqueueAll=()=>{if(GH()&&GH().token)setQ([...new Set([...Q(),...S.places.flatMap(p=>p.imgs||[])])])};
+async function initSync(){const c=GH();
+ if(c&&c.token){setSync('Đang đồng bộ…');try{
+  if(localStorage.getItem(DK)){await pushPlaces()}else{
+   const r=await gh(base()+'/places.json',{q:'?ref='+c.branch});
+   if(r.ok){const j=await r.json(),d=JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));if(Array.isArray(d.places)){S={places:d.places};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}}
+   else if(r.status===404){enqueueAll();await pushPlaces()}else throw 0}
+  await flushQueue();setSync('Đã đồng bộ GitHub')}catch(e){setSync('Không đồng bộ được, đang dùng dữ liệu trên máy này')}return}
+ try{const r=await fetch('data/places.json?t='+Date.now());if(r.ok){const d=await r.json();if(Array.isArray(d.places)){S={places:d.places};RO=true;document.body.classList.add('ro');setSync('Chế độ chỉ xem. Nhập token ở mục Đồng bộ GitHub để chỉnh sửa');render()}}}catch(e){}}
+const save=()=>{if(RO)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+ if(GH()&&GH().token){try{localStorage.setItem(DK,'1')}catch(e){}clearTimeout(pt);pt=setTimeout(pushPlaces,1200)}};
 const $=i=>document.getElementById(i);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sec=()=>SEC.find(s=>s.id===cur);
@@ -148,13 +210,17 @@ function nav(){
  SEC.forEach(s=>{if(s.g!==g){g=s.g;h+=`<div class="grp">${g}</div>`}
   const n=S.places.filter(p=>p.sec===s.id&&p.status!=='Loại').length;
   h+=`<button data-s="${s.id}" class="${s.id===cur?'on':''}">${s.n}<span class="n">${n}</span></button>`});
- h+=`<div class="tools"><button id="exp">Xuất JSON</button><button id="impb">Nhập JSON</button></div>`;
+ h+=`<div class="home" id="sync" style="margin-top:18px">${esc(syncMsg)}</div><div class="tools" style="margin-top:0;border-top:0"><button id="ghb">Đồng bộ GitHub</button><button id="exp">Xuất JSON</button><button id="impb">Nhập JSON</button></div>`;
  $('nav').innerHTML=h;
  $('nav').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{cur=b.dataset.s;sel=null;render()});
- $('exp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='so-tay-cuoi.json';a.click()};
+ $('exp').onclick=async()=>{try{const images={};for(const p of S.places)for(const id of p.imgs||[]){const b=await imgGet(id);if(b)images[id]=await toDataUrl(b)}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({places:S.places,images})],{type:'application/json'}));a.download='so-tay-cuoi.json';a.click()}catch(e){toast('Không xuất được dữ liệu hình ảnh')}};
  $('impb').onclick=()=>$('imp').click();
+ $('ghb').onclick=openGh;
 }
-$('imp').onchange=async e=>{try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d.places))throw 0;S=d;save();render();toast('Đã nhập dữ liệu')}catch(x){toast('File JSON không hợp lệ')}};
+$('imp').onchange=async e=>{try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d.places))throw 0;
+ for(const [id,u] of Object.entries(d.images||{}))await imgPut(id,await (await fetch(u)).blob());
+ S={places:d.places};enqueueAll();save();render();flushQueue();toast('Đã nhập dữ liệu')}catch(x){toast('File JSON không hợp lệ')}};
 
 function ordered(list){
  const o=origin(),a=list.filter(has),b=list.filter(p=>!has(p));if(!o)return list;
@@ -189,9 +255,10 @@ function render(){
    ${p.addr?`<div class="note">${esc(p.addr)}</div>`:''}
    ${items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
    ${p.note?`<div class="note">${esc(p.note)}</div>`:''}
-   <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button>${p.status==='Chưa liên hệ'||p.status==='Đã liên hệ'?`<label class="sw"><input type="checkbox" data-t="${p.id}" ${p.status==='Đã liên hệ'?'checked':''}><span class="trk"></span>Đã liên hệ</label>`:''}</div>
+   <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}${p.imgs&&p.imgs.length?`<button class="btn sm" data-v="${p.id}">Xem hình (${p.imgs.length})</button>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button>${p.status==='Chưa liên hệ'||p.status==='Đã liên hệ'?`<label class="sw"><input type="checkbox" data-t="${p.id}" ${p.status==='Đã liên hệ'?'checked':''}><span class="trk"></span>Đã liên hệ</label>`:''}</div>
   </article>`}).join(''):`<div class="empty">Chưa có địa điểm nào trong mục này.<br>Bấm "Thêm địa điểm" để bắt đầu.</div>`;
  $('cards').querySelectorAll('[data-t]').forEach(c=>c.onchange=()=>{const p=S.places.find(x=>x.id===c.dataset.t);p.status=c.checked?'Đã liên hệ':'Chưa liên hệ';save();render()});
+ $('cards').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>openLb(b.dataset.v));
  $('cards').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>openEdit(b.dataset.e));
  $('cards').querySelectorAll('.card h3').forEach(h=>h.onclick=()=>{sel=h.closest('.card').dataset.id;render()});
 }
@@ -205,19 +272,36 @@ function openEdit(id){
  $('f_status').innerHTML=Object.keys(ST).map(k=>`<option ${k===(p.status||'Chưa liên hệ')?'selected':''}>${k}</option>`).join('');
  $('f_name').value=p.name||'';$('f_price').value=p.price||'';$('f_phone').value=p.phone||'';$('f_link').value=p.link||'';
  $('f_addr').value=p.addr||'';$('f_pos').value=has(p)?`${p.lat}, ${p.lng}`:'';$('f_svc').value=p.svc||'';$('f_note').value=p.note||'';
+ tmp=[...(p.imgs||[])];added=[];removed=[];renderThumbs();
  $('d_del').style.visibility=editing?'visible':'hidden';$('dlg').showModal();
 }
 $('add').onclick=()=>openEdit();
 $('d_cancel').onclick=()=>$('dlg').close();
-$('d_del').onclick=()=>{if(confirm('Xóa địa điểm này?')){S.places=S.places.filter(p=>p!==editing);save();$('dlg').close();render()}};
+$('dlg').addEventListener('close',()=>{if(!committed)added.forEach(imgDel);committed=false});
+$('d_img').onclick=()=>$('f_img').click();
+$('f_img').onchange=async e=>{for(const f of e.target.files){try{const b=await shrink(f),id='i'+Date.now()+Math.random().toString(36).slice(2,6);await imgPut(id,b);tmp.push(id);added.push(id)}catch(x){toast('Không thêm được '+f.name+' (định dạng không hỗ trợ hoặc trình duyệt không cho lưu)')}}e.target.value='';renderThumbs()};
+$('lbx').onclick=()=>$('lb').close();
+$('lbp').onclick=()=>{lbI=(lbI-1+lbIds.length)%lbIds.length;showLb()};
+$('lbn').onclick=()=>{lbI=(lbI+1)%lbIds.length;showLb()};
+document.addEventListener('keydown',e=>{if(!$('lb').open)return;if(e.key==='ArrowLeft')$('lbp').click();if(e.key==='ArrowRight')$('lbn').click()});
+$('d_del').onclick=()=>{if(confirm('Xóa địa điểm này?')){(editing.imgs||[]).concat(added).forEach(imgDel);(editing.imgs||[]).forEach(rmRemote);S.places=S.places.filter(p=>p!==editing);save();committed=true;$('dlg').close();render()}};
 $('d_save').onclick=()=>{
  const name=$('f_name').value.trim();if(!name){toast('Cần nhập tên địa điểm');return}
  const pos=parsePos($('f_pos').value),p=editing||{id:'p'+Date.now(),sec:cur};
  Object.assign(p,{name,status:$('f_status').value,price:$('f_price').value.trim(),phone:$('f_phone').value.trim(),link:$('f_link').value.trim(),addr:$('f_addr').value.trim(),svc:$('f_svc').value,note:$('f_note').value});
  if(pos){p.lat=pos.lat;p.lng=pos.lng}else{delete p.lat;delete p.lng}
- if(!editing)S.places.push(p);save();$('dlg').close();render();
+ p.imgs=[...tmp];removed.forEach(imgDel);if(!editing)S.places.push(p);save();
+ if(GH()&&GH().token){const nq=added.filter(id=>tmp.includes(id));if(nq.length){setQ([...new Set([...Q(),...nq])]);setSync('Đang tải hình lên GitHub…');flushQueue().then(ok=>ok&&setSync('Đã đồng bộ GitHub'))}removed.forEach(rmRemote)}
+ committed=true;$('dlg').close();render();
 };
-render();
+function openGh(){const c=GH()||{};$('g_owner').value=c.owner||'thaopham2091';$('g_repo').value=c.repo||'chia-tien-teams';$('g_branch').value=c.branch||'wedding-list';$('g_dir').value=c.dir||'';$('g_token').value=c.token||'';$('gdlg').showModal()}
+$('g_cancel').onclick=()=>$('gdlg').close();
+$('g_off').onclick=()=>{try{localStorage.removeItem(GK);localStorage.removeItem(DK);localStorage.removeItem(QK)}catch(e){}setSync('');$('gdlg').close();nav();toast('Đã ngắt kết nối, dữ liệu trên máy vẫn còn')};
+$('g_save').onclick=()=>{const c={owner:$('g_owner').value.trim(),repo:$('g_repo').value.trim(),branch:$('g_branch').value.trim()||'wedding-list',dir:$('g_dir').value.trim(),token:$('g_token').value.trim()};
+ if(!c.owner||!c.repo||!c.token){toast('Cần nhập tài khoản, tên repo và token');return}
+ try{localStorage.setItem(GK,JSON.stringify(c))}catch(e){toast('Trình duyệt không cho lưu cấu hình');return}
+ RO=false;document.body.classList.remove('ro');$('gdlg').close();initSync()};
+render();initSync();
 </script>
 </body>
 </html>
