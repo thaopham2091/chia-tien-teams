@@ -110,6 +110,7 @@ nav .tools{padding-top:8px}section.list{border-right:0}.cards{overflow:visible}}
     <label>Số điện thoại / Zalo<input id="f_phone"></label>
     <label>Link Google Maps / Facebook<input id="f_link"></label>
   </div>
+  <label>Link Google Drive (ảnh mẫu, báo giá, hợp đồng…)<input id="f_drive" placeholder="https://drive.google.com/..."></label>
   <label>Địa chỉ<input id="f_addr"></label>
   <label>Tọa độ, để tính khoảng cách (không bắt buộc; dán "lat,lng" hoặc link Google Maps dài có @lat,lng)<input id="f_pos" placeholder="10.8431, 106.8370"></label>
     <label>Dịch vụ & nội dung gói (mỗi dòng một ý)<textarea id="f_svc" rows="5"></textarea></label>
@@ -279,7 +280,7 @@ function render(){
    ${p.addr?`<div class="note">${esc(p.addr)}</div>`:''}
    ${items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
    ${p.note?`<div class="note">${esc(p.note)}</div>`:''}
-   <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}${p.imgs&&p.imgs.length?`<button class="btn sm" data-v="${p.id}">Xem hình (${p.imgs.length})</button>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button>${p.status==='Chưa liên hệ'||p.status==='Đã liên hệ'?`<label class="sw"><input type="checkbox" data-t="${p.id}" ${p.status==='Đã liên hệ'?'checked':''}><span class="trk"></span>Đã liên hệ</label>`:''}</div>
+   <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}${/^https?:\/\//i.test(p.drive||'')?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.drive)}">Mở Google Drive</a>`:''}${p.imgs&&p.imgs.length?`<button class="btn sm" data-v="${p.id}">Xem hình (${p.imgs.length})</button>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button>${p.status==='Chưa liên hệ'||p.status==='Đã liên hệ'?`<label class="sw"><input type="checkbox" data-t="${p.id}" ${p.status==='Đã liên hệ'?'checked':''}><span class="trk"></span>Đã liên hệ</label>`:''}</div>
   </article>`}).join(''):`<div class="empty">Chưa có địa điểm nào trong mục này.<br>Bấm "Thêm địa điểm" để bắt đầu.</div>`;
  $('cards').querySelectorAll('[data-t]').forEach(c=>c.onchange=()=>{const p=S.places.find(x=>x.id===c.dataset.t);p.status=c.checked?'Đã liên hệ':'Chưa liên hệ';p.ts=Date.now();save();render()});
  $('cards').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>openLb(b.dataset.v));
@@ -295,7 +296,7 @@ function openEdit(id){
  $('dtitle').textContent=editing?'Sửa địa điểm':'Thêm địa điểm';
  $('f_status').innerHTML=Object.keys(ST).map(k=>`<option ${k===(p.status||'Chưa liên hệ')?'selected':''}>${k}</option>`).join('');
  $('f_name').value=p.name||'';$('f_price').value=p.price||'';$('f_phone').value=p.phone||'';$('f_link').value=p.link||'';
- $('f_addr').value=p.addr||'';$('f_pos').value=has(p)?`${p.lat}, ${p.lng}`:'';$('f_svc').value=p.svc||'';$('f_note').value=p.note||'';
+ $('f_addr').value=p.addr||'';$('f_drive').value=p.drive||'';$('f_pos').value=has(p)?`${p.lat}, ${p.lng}`:'';$('f_svc').value=p.svc||'';$('f_note').value=p.note||'';
  tmp=[...(p.imgs||[])];added=[];removed=[];renderThumbs();
  $('d_del').style.visibility=editing?'visible':'hidden';$('dlg').showModal();
 }
@@ -312,7 +313,7 @@ $('d_del').onclick=()=>{if(confirm('Xóa địa điểm này?')){(editing.imgs||
 $('d_save').onclick=()=>{
  const name=$('f_name').value.trim();if(!name){toast('Cần nhập tên địa điểm');return}
  const pos=parsePos($('f_pos').value),p=(editing&&S.places.find(x=>x.id===editing.id))||editing||{id:'p'+Date.now(),sec:cur};p.ts=Date.now();
- Object.assign(p,{name,status:$('f_status').value,price:$('f_price').value.trim(),phone:$('f_phone').value.trim(),link:$('f_link').value.trim(),addr:$('f_addr').value.trim(),svc:$('f_svc').value,note:$('f_note').value});
+ Object.assign(p,{name,status:$('f_status').value,price:$('f_price').value.trim(),phone:$('f_phone').value.trim(),link:$('f_link').value.trim(),drive:$('f_drive').value.trim(),addr:$('f_addr').value.trim(),svc:$('f_svc').value,note:$('f_note').value});
  if(pos){p.lat=pos.lat;p.lng=pos.lng}else{delete p.lat;delete p.lng}
  p.imgs=[...tmp];removed.forEach(imgDel);if(!S.places.includes(p)){S.places.push(p);delete S.deleted[p.id]}save();
  if(GH()&&GH().token){const nq=added.filter(id=>tmp.includes(id));if(nq.length){setQ([...new Set([...Q(),...nq])]);setSync('Đang tải hình lên GitHub…');flushQueue().then(ok=>ok&&setSync('Đã đồng bộ GitHub'))}removed.forEach(rmRemote)}
