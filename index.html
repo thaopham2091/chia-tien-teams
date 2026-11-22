@@ -18,6 +18,7 @@ button{cursor:pointer}
 nav{padding:20px 14px;border-right:1px solid var(--line);overflow:auto;background:var(--panel)}
 nav h1{font:700 20px/1.2 var(--f-head);margin:0 0 4px;padding:0 8px}
 nav .home{font-size:12px;color:var(--mute);padding:0 8px 16px}
+nav .chips{display:flex;flex-direction:column}
 nav .grp{font:600 12px var(--f-body);color:var(--mute);margin:14px 8px 4px}
 nav button{display:flex;justify-content:space-between;width:100%;text-align:left;border:0;background:none;padding:8px;border-radius:8px}
 nav button:hover{background:var(--bg)}
@@ -75,7 +76,13 @@ dialog::backdrop{background:#0006}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:9999}
 @media(max-width:980px){.app{grid-template-columns:1fr;height:auto}nav{border-right:0;border-bottom:1px solid var(--line)}
-nav .grp{display:inline-block}nav button{display:inline-flex;width:auto}section.list{border-right:0}.cards{overflow:visible}}
+nav{padding:14px}nav .home{padding-bottom:6px}
+nav .gr{padding:8px 0;border-top:1px solid var(--line)}nav .grp{margin:0 0 6px}
+nav .chips{flex-direction:row;flex-wrap:wrap;gap:6px}
+nav .chips button{width:auto;align-items:center;gap:8px;border:1px solid var(--line);padding:6px 12px}
+nav .chips button.on{border-color:var(--plum)}
+nav .chips .n{background:var(--bg);color:var(--ink);border-radius:99px;padding:0 7px;opacity:1}
+nav .tools{padding-top:8px}section.list{border-right:0}.cards{overflow:visible}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 </style>
 </head>
@@ -127,6 +134,7 @@ const HOME={lat:10.8431,lng:106.8370,name:'Vinhomes Grand Park, Q9'};
 const BMT={lat:12.6675,lng:108.0378};
 const SEC=[
  {id:'pre',g:'Chụp pre-wedding',n:'TP.HCM',city:'hcm',d:'Studio chụp ảnh cưới ngoại cảnh'},
+ {id:'pre-vt',g:'Chụp pre-wedding',n:'Vũng Tàu',city:'vt',d:'Studio chụp ảnh cưới ngoại cảnh tại Vũng Tàu'},
  {id:'cer-bmt',g:'Quay chụp lễ cưới',n:'Buôn Ma Thuột',city:'bmt',d:'Quay phim & chụp ảnh ngày cưới, ăn hỏi'},
  {id:'cer-hcm',g:'Quay chụp lễ cưới',n:'TP.HCM',city:'hcm',d:'Quay phim & chụp ảnh ngày cưới, ăn hỏi'},
  {id:'vest',g:'May vest',n:'TP.HCM',city:'hcm',d:'Tiệm may vest chú rể'},
@@ -197,7 +205,7 @@ const save=()=>{if(RO)return;try{localStorage.setItem(KEY,JSON.stringify(S))}cat
 const $=i=>document.getElementById(i);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sec=()=>SEC.find(s=>s.id===cur);
-const origin=()=>sec().city==='hcm'?HOME:null;
+const origin=()=>sec().city!=='bmt'?HOME:null;
 const has=p=>typeof p.lat==='number'&&typeof p.lng==='number';
 function km(a,b){const R=6371,t=x=>x*Math.PI/180,dLa=t(b.lat-a.lat),dLo=t(b.lng-a.lng);
  const h=Math.sin(dLa/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
@@ -206,10 +214,10 @@ function toast(m){const t=document.createElement('div');t.className='toast';t.te
 const dest=p=>has(p)?`${p.lat},${p.lng}`:(p.addr||p.name+' '+sec().n);
 
 function nav(){
- let h=`<h1>Sổ tay cưới</h1><div class="home">Xuất phát: ${HOME.name}</div>`,g='';
- SEC.forEach(s=>{if(s.g!==g){g=s.g;h+=`<div class="grp">${g}</div>`}
-  const n=S.places.filter(p=>p.sec===s.id&&p.status!=='Loại').length;
-  h+=`<button data-s="${s.id}" class="${s.id===cur?'on':''}">${s.n}<span class="n">${n}</span></button>`});
+ let h=`<h1>Sổ tay cưới</h1><div class="home">Xuất phát: ${HOME.name}</div>`;
+ [...new Set(SEC.map(x=>x.g))].forEach(g=>{h+=`<div class="gr"><div class="grp">${g}</div><div class="chips">`+SEC.filter(x=>x.g===g).map(x=>{
+  const n=S.places.filter(p=>p.sec===x.id&&p.status!=='Loại').length;
+  return `<button data-s="${x.id}" class="${x.id===cur?'on':''}">${x.n}<span class="n">${n}</span></button>`}).join('')+`</div></div>`});
  h+=`<div class="home" id="sync" style="margin-top:18px">${esc(syncMsg)}</div><div class="tools" style="margin-top:0;border-top:0"><button id="ghb">Đồng bộ GitHub</button><button id="exp">Xuất JSON</button><button id="impb">Nhập JSON</button></div>`;
  $('nav').innerHTML=h;
  $('nav').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{cur=b.dataset.s;sel=null;render()});
