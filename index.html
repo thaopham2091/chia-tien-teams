@@ -156,8 +156,9 @@ const seed=()=>[
  {id:'s4',sec:'pre',name:'Helen Bridal',status:'Chưa liên hệ',price:'15M (gói Ngoại Cảnh SG)',link:'https://maps.app.goo.gl/s4yuT4tvUoRj5nwE8',
   svc:'2 concept ngoại cảnh + 1 concept studio\n2 váy, 2 vest\n42 ảnh chỉnh sửa\nPhotobook 30x30, 30 trang\n1 ảnh cổng ép gỗ 60x90 (tặng up tráng gương)\n10 ảnh để bàn 13x18 (tặng đổi 15x21 tráng gương, 6 tấm)\n1 slide\nGiao file gốc\nĐã gồm trang điểm & làm tóc'}
 ];
-let S={places:seed()},cur='pre',editing=null,sel=null;
+let S={places:seed(),deleted:{}},cur='pre',editing=null,sel=null;
 try{const r=localStorage.getItem(KEY);if(r)S=JSON.parse(r)}catch(e){}
+S.deleted=S.deleted||{};
 let db;
 const idb=()=>db?Promise.resolve(db):new Promise((ok,no)=>{const r=indexedDB.open('so-tay-cuoi-img',1);r.onupgradeneeded=()=>r.result.createObjectStore('img',{keyPath:'id'});r.onsuccess=()=>{db=r.result;ok(db)};r.onerror=()=>no(r.error)});
 const tx=async(m,f)=>{const d=await idb();return new Promise((ok,no)=>{const t=d.transaction('img',m),q=f(t.objectStore('img'));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>no(t.error)})};
@@ -189,17 +190,32 @@ function ghPut(path,b64,msg){return serial(async()=>{const c=GH();
  throw new Error('conflict')})}
 function rmRemote(id){const c=GH();if(!c||!c.token)return;setQ(Q().filter(x=>x!==id));return serial(async()=>{try{const p=`${base()}/img/${id}.jpg`,r=await gh(p,{q:'?ref='+c.branch});if(!r.ok)return;await gh(p,{method:'DELETE',body:{message:'Xóa hình '+id,sha:(await r.json()).sha,branch:c.branch}})}catch(e){}})}
 const enc=t=>btoa(unescape(encodeURIComponent(t)));
-async function pushPlaces(){const c=GH();if(!c||!c.token||RO)return;try{setSync('Đang lưu lên GitHub…');await ghPut(base()+'/places.json',enc(JSON.stringify({places:S.places},null,1)),'Cập nhật sổ tay cưới');localStorage.removeItem(DK);setSync('Đã đồng bộ GitHub')}catch(e){setSync('Lỗi lưu lên GitHub, kiểm tra token và quyền Contents')}}
+const localSet=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const dec=t=>JSON.parse(decodeURIComponent(escape(atob(t.replace(/\n/g,'')))));
+function merge(L,R){const del={...(R.deleted||{})};for(const[k,v]of Object.entries(L.deleted||{}))del[k]=Math.max(del[k]||0,v);
+ const m=new Map();(R.places||[]).forEach(p=>m.set(p.id,p));
+ (L.places||[]).forEach(p=>{const q=m.get(p.id);if(!q||(p.ts||0)>(q.ts||0))m.set(p.id,p)});
+ return{places:[...m.values()].filter(p=>!(del[p.id]&&del[p.id]>=(p.ts||0))),deleted:del}}
+function pushPlaces(){const c=GH();if(!c||!c.token||RO)return;return serial(async()=>{try{setSync('Đang lưu lên GitHub…');const path=base()+'/places.json';
+ for(let i=0;i<3;i++){let sha,R={places:[],deleted:{}};const r=await gh(path,{q:'?ref='+c.branch});
+  if(r.ok){const j=await r.json();sha=j.sha;try{R=dec(j.content)}catch(e){}}else if(r.status!==404)throw 0;
+  const before=JSON.stringify(S.places);S=merge(S,R);if(JSON.stringify(S.places)!==before){localSet();render()}
+  const w=await gh(path,{method:'PUT',body:{message:'Cập nhật sổ tay cưới',content:enc(JSON.stringify(S,null,1)),branch:c.branch,sha}});
+  if(w.ok){localStorage.removeItem(DK);setSync('Đã đồng bộ GitHub');return}
+  if(w.status!==409&&w.status!==422)throw 0}
+ throw 0}catch(e){setSync('Lỗi lưu lên GitHub, kiểm tra token và quyền Contents')}})}
 async function flushQueue(){const c=GH();if(!c||!c.token)return false;let q=Q();for(const id of [...q]){const b=await imgGetLocal(id).catch(()=>null);if(b){try{await ghPut(`${base()}/img/${id}.jpg`,(await toDataUrl(b)).split(',')[1],'Thêm hình '+id)}catch(e){setSync('Một số hình chưa tải lên được, sẽ thử lại lần sau');return false}}q=q.filter(x=>x!==id);setQ(q)}return true}
 const enqueueAll=()=>{if(GH()&&GH().token)setQ([...new Set([...Q(),...S.places.flatMap(p=>p.imgs||[])])])};
 async function initSync(){const c=GH();
  if(c&&c.token){setSync('Đang đồng bộ…');try{
   if(localStorage.getItem(DK)){await pushPlaces()}else{
    const r=await gh(base()+'/places.json',{q:'?ref='+c.branch});
-   if(r.ok){const j=await r.json(),d=JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g,'')))));if(Array.isArray(d.places)){S={places:d.places};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}}
+   if(r.ok){const R=dec((await r.json()).content);R.deleted=R.deleted||{};
+    if(Array.isArray(R.places)){const M=merge(S,R);S=M;localSet();render();
+     if(JSON.stringify(M.places)!==JSON.stringify(R.places)||Object.keys(M.deleted).length!==Object.keys(R.deleted).length)await pushPlaces()}}
    else if(r.status===404){enqueueAll();await pushPlaces()}else throw 0}
-  await flushQueue();setSync('Đã đồng bộ GitHub')}catch(e){setSync('Không đồng bộ được, đang dùng dữ liệu trên máy này')}return}
- try{const r=await fetch('data/places.json?t='+Date.now());if(r.ok){const d=await r.json();if(Array.isArray(d.places)){S={places:d.places};RO=true;document.body.classList.add('ro');setSync('Chế độ chỉ xem. Nhập token ở mục Đồng bộ GitHub để chỉnh sửa');render()}}}catch(e){}}
+  await flushQueue();if(!/Lỗi|chưa tải/.test(syncMsg))setSync('Đã đồng bộ GitHub')}catch(e){setSync('Không đồng bộ được, đang dùng dữ liệu trên máy này')}return}
+ try{const r=await fetch('data/places.json?t='+Date.now());if(r.ok){const d=await r.json();if(Array.isArray(d.places)){S={places:d.places,deleted:d.deleted||{}};RO=true;document.body.classList.add('ro');setSync('Chế độ chỉ xem. Nhập token ở mục Đồng bộ GitHub để chỉnh sửa');render()}}}catch(e){}}
 const save=()=>{if(RO)return;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
  if(GH()&&GH().token){try{localStorage.setItem(DK,'1')}catch(e){}clearTimeout(pt);pt=setTimeout(pushPlaces,1200)}};
 const $=i=>document.getElementById(i);
@@ -222,13 +238,13 @@ function nav(){
  $('nav').innerHTML=h;
  $('nav').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{cur=b.dataset.s;sel=null;render()});
  $('exp').onclick=async()=>{try{const images={};for(const p of S.places)for(const id of p.imgs||[]){const b=await imgGet(id);if(b)images[id]=await toDataUrl(b)}
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({places:S.places,images})],{type:'application/json'}));a.download='so-tay-cuoi.json';a.click()}catch(e){toast('Không xuất được dữ liệu hình ảnh')}};
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({places:S.places,deleted:S.deleted,images})],{type:'application/json'}));a.download='so-tay-cuoi.json';a.click()}catch(e){toast('Không xuất được dữ liệu hình ảnh')}};
  $('impb').onclick=()=>$('imp').click();
  $('ghb').onclick=openGh;
 }
 $('imp').onchange=async e=>{try{const d=JSON.parse(await e.target.files[0].text());if(!Array.isArray(d.places))throw 0;
  for(const [id,u] of Object.entries(d.images||{}))await imgPut(id,await (await fetch(u)).blob());
- S={places:d.places};enqueueAll();save();render();flushQueue();toast('Đã nhập dữ liệu')}catch(x){toast('File JSON không hợp lệ')}};
+ d.places.forEach(p=>p.ts=Date.now());S={places:d.places,deleted:d.deleted||{}};enqueueAll();save();render();flushQueue();toast('Đã nhập dữ liệu')}catch(x){toast('File JSON không hợp lệ')}};
 
 function ordered(list){
  const o=origin(),a=list.filter(has),b=list.filter(p=>!has(p));if(!o)return list;
@@ -265,7 +281,7 @@ function render(){
    ${p.note?`<div class="note">${esc(p.note)}</div>`:''}
    <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}${p.imgs&&p.imgs.length?`<button class="btn sm" data-v="${p.id}">Xem hình (${p.imgs.length})</button>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button>${p.status==='Chưa liên hệ'||p.status==='Đã liên hệ'?`<label class="sw"><input type="checkbox" data-t="${p.id}" ${p.status==='Đã liên hệ'?'checked':''}><span class="trk"></span>Đã liên hệ</label>`:''}</div>
   </article>`}).join(''):`<div class="empty">Chưa có địa điểm nào trong mục này.<br>Bấm "Thêm địa điểm" để bắt đầu.</div>`;
- $('cards').querySelectorAll('[data-t]').forEach(c=>c.onchange=()=>{const p=S.places.find(x=>x.id===c.dataset.t);p.status=c.checked?'Đã liên hệ':'Chưa liên hệ';save();render()});
+ $('cards').querySelectorAll('[data-t]').forEach(c=>c.onchange=()=>{const p=S.places.find(x=>x.id===c.dataset.t);p.status=c.checked?'Đã liên hệ':'Chưa liên hệ';p.ts=Date.now();save();render()});
  $('cards').querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>openLb(b.dataset.v));
  $('cards').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>openEdit(b.dataset.e));
  $('cards').querySelectorAll('.card h3').forEach(h=>h.onclick=()=>{sel=h.closest('.card').dataset.id;render()});
@@ -292,13 +308,13 @@ $('lbx').onclick=()=>$('lb').close();
 $('lbp').onclick=()=>{lbI=(lbI-1+lbIds.length)%lbIds.length;showLb()};
 $('lbn').onclick=()=>{lbI=(lbI+1)%lbIds.length;showLb()};
 document.addEventListener('keydown',e=>{if(!$('lb').open)return;if(e.key==='ArrowLeft')$('lbp').click();if(e.key==='ArrowRight')$('lbn').click()});
-$('d_del').onclick=()=>{if(confirm('Xóa địa điểm này?')){(editing.imgs||[]).concat(added).forEach(imgDel);(editing.imgs||[]).forEach(rmRemote);S.places=S.places.filter(p=>p!==editing);save();committed=true;$('dlg').close();render()}};
+$('d_del').onclick=()=>{if(confirm('Xóa địa điểm này?')){(editing.imgs||[]).concat(added).forEach(imgDel);(editing.imgs||[]).forEach(rmRemote);S.places=S.places.filter(p=>p.id!==editing.id);S.deleted[editing.id]=Date.now();save();committed=true;$('dlg').close();render()}};
 $('d_save').onclick=()=>{
  const name=$('f_name').value.trim();if(!name){toast('Cần nhập tên địa điểm');return}
- const pos=parsePos($('f_pos').value),p=editing||{id:'p'+Date.now(),sec:cur};
+ const pos=parsePos($('f_pos').value),p=(editing&&S.places.find(x=>x.id===editing.id))||editing||{id:'p'+Date.now(),sec:cur};p.ts=Date.now();
  Object.assign(p,{name,status:$('f_status').value,price:$('f_price').value.trim(),phone:$('f_phone').value.trim(),link:$('f_link').value.trim(),addr:$('f_addr').value.trim(),svc:$('f_svc').value,note:$('f_note').value});
  if(pos){p.lat=pos.lat;p.lng=pos.lng}else{delete p.lat;delete p.lng}
- p.imgs=[...tmp];removed.forEach(imgDel);if(!editing)S.places.push(p);save();
+ p.imgs=[...tmp];removed.forEach(imgDel);if(!S.places.includes(p)){S.places.push(p);delete S.deleted[p.id]}save();
  if(GH()&&GH().token){const nq=added.filter(id=>tmp.includes(id));if(nq.length){setQ([...new Set([...Q(),...nq])]);setSync('Đang tải hình lên GitHub…');flushQueue().then(ok=>ok&&setSync('Đã đồng bộ GitHub'))}removed.forEach(rmRemote)}
  committed=true;$('dlg').close();render();
 };
@@ -309,6 +325,7 @@ $('g_save').onclick=()=>{const c={owner:$('g_owner').value.trim(),repo:$('g_repo
  if(!c.owner||!c.repo||!c.token){toast('Cần nhập tài khoản, tên repo và token');return}
  try{localStorage.setItem(GK,JSON.stringify(c))}catch(e){toast('Trình duyệt không cho lưu cấu hình');return}
  RO=false;document.body.classList.remove('ro');$('gdlg').close();initSync()};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&GH()&&GH().token&&!$('dlg').open)initSync()});
 render();initSync();
 </script>
 </body>
