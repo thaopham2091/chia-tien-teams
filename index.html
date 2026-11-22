@@ -45,6 +45,13 @@ section.list{display:flex;flex-direction:column;min-height:0;border-right:1px so
 .card ul{margin:6px 0;padding-left:18px;font-size:13px}
 .card .note{font-size:13px;color:var(--mute);margin:6px 0;white-space:pre-wrap}
 .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.sw{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-size:13px;cursor:pointer}
+.sw input{position:absolute;opacity:0;width:0;height:0}
+.sw .trk{width:38px;height:22px;border-radius:99px;background:var(--line);position:relative;transition:background .15s}
+.sw .trk::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0004;transition:transform .15s}
+.sw input:checked+.trk{background:var(--sage)}
+.sw input:checked+.trk::after{transform:translateX(16px)}
+.sw input:focus-visible+.trk{outline:2px solid var(--plum);outline-offset:2px}
 .empty{padding:28px 18px;color:var(--mute);border:1px dashed var(--line);border-radius:var(--r);text-align:center}
 .route{margin:0 18px 12px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);font-size:13px}
 .route ol{margin:6px 0 8px;padding-left:20px}
@@ -182,8 +189,9 @@ function render(){
    ${p.addr?`<div class="note">${esc(p.addr)}</div>`:''}
    ${items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
    ${p.note?`<div class="note">${esc(p.note)}</div>`:''}
-   <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button></div>
+   <div class="acts"><a class="btn sm" target="_blank" rel="noopener" href="${dirUrl([p],o)}">Chỉ đường</a>${p.link?`<a class="btn sm" target="_blank" rel="noopener" href="${esc(p.link)}">Mở link</a>`:''}<button class="btn sm" data-e="${p.id}">Sửa</button>${p.status==='Chưa liên hệ'||p.status==='Đã liên hệ'?`<label class="sw"><input type="checkbox" data-t="${p.id}" ${p.status==='Đã liên hệ'?'checked':''}><span class="trk"></span>Đã liên hệ</label>`:''}</div>
   </article>`}).join(''):`<div class="empty">Chưa có địa điểm nào trong mục này.<br>Bấm "Thêm địa điểm" để bắt đầu.</div>`;
+ $('cards').querySelectorAll('[data-t]').forEach(c=>c.onchange=()=>{const p=S.places.find(x=>x.id===c.dataset.t);p.status=c.checked?'Đã liên hệ':'Chưa liên hệ';save();render()});
  $('cards').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>openEdit(b.dataset.e));
  $('cards').querySelectorAll('.card h3').forEach(h=>h.onclick=()=>{sel=h.closest('.card').dataset.id;render()});
 }
